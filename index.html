@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<link href="https://fonts.googleapis.com/css?family=Noto+Sans+TC:700&display=swap" rel="stylesheet">
+
+<div style="position: absolute; top: 0px; left: 0px">
+    <div style="position: relative; top: 0px; left: 0px; border: 1px solid black;">
+        <img style="opacity: 0.25;" src="./assets/114335-OP4B4R-67-Nordic.png">
+    </div>
+    <div style="position: absolute; top: 150px; left: 100px;">
+        <img style="width: 800px;" src="./assets/EMBL.png">
+    </div>
+    <div style="position: absolute; top: 825px; left: 600px;">
+        <img style="width: 350px;" src="./assets/NCMM.png">
+    </div>
+    <div style="position: absolute; top: 1900px; left: 450px;">
+        <img style="width: 450px;" src="./assets/DANDRITE.png">
+    </div>
+    <div style="position: absolute; top: 275px; left: 1150px;">
+        <img style="width: 280px;" src="./assets/MIMS.jpg">
+    </div>
+    <div style="position: absolute; top: 675px; left: 1675px;">
+        <img style="width: 325px;" src="./assets/FIMM.png">
+    </div>
+    <div style="position: absolute; top: 1625px; left: 1700px; width: 350px; height: 300px; border: 1px solid lightgrey;">
+    </div>
+    <span style="position: absolute; top:2100px; right:175px; font-family: 'Noto Sans TC'; font-size: 20px; color: grey">Map designed by Freepik</span>
+    <div id="networks" style="top: 0px; left: 0px; width: 2051px; height: 2051px; position: absolute;"></div>
+</div>
+
+
+<script src="https://d3js.org/d3.v5.js"></script>
+<script>
+
+    var height = 2051;
+    var width  = 2051;
+    render();
+
+    count = (node) => {
+        return node.title
+    }
+
+    async function render() {
+        const data = await d3.json("https://raw.githubusercontent.com/dn070017/EMBL-Nordic-Partnership-Collaboration/master/dataset/roster.json")
+        console.log(data);
+        const color = d3.scaleOrdinal()
+                        .domain([0, 1, 2, 3, 4])
+                        .range(d3.schemeSet1);
+    
+        const links = data.links.map(d => Object.create(d));
+        const nodes = data.nodes.map(d => Object.create(d));
+
+        console.log(nodes);
+        console.log(links);
+
+        const xCenter = {'NCMM': -150, 'DANDRITE': -300, 'FIMM': 700, 'MIMS': 275}
+        const yCenter = {'NCMM': 100, 'DANDRITE': 600, 'FIMM': 0, 'MIMS': -300}
+        const caption = [{"title": 4, "text": "Group Leader", "y": 650},
+                         {"title": 3, "text": "Postdoc Researcher", "y": 700},
+                         {"title": 2, "text": "PhD Student", "y": 750},
+                         {"title": 1, "text": "Academic Employee", "y": 800},
+                         {"title": 0, "text": "Student", "y": 850}]
+
+        var simulation = d3.forceSimulation(nodes)
+                           //.force("link", d3.forceLink(links).id(d => d.id).strength(link => 0.005 * Math.max(count(link.source), count(link.target)) ^ 2))
+                           .force("link", d3.forceLink(links).id(d => d.id).strength(0.1))
+                           .force("charge", d3.forceManyBody().strength(-60))
+                           .force("x", d3.forceX().x(function(d) {
+                                return xCenter[d.institution];
+                            }).strength(0.2))
+                           .force("y", d3.forceY().y(function(d) {
+                                  return yCenter[d.institution];
+                            }).strength(0.2))
+
+        const svg = d3.select("#networks")
+                      .append("svg")
+                      .attr("viewBox", [-width / 2, -height / 2, width, height]);
+    
+        const link = svg.append("g")
+                        .attr("stroke", "#88919e")
+                        .attr("stroke-opacity", 1)
+                        .selectAll("line")
+                        .data(links)
+                        .join("line")
+                        .attr("fill", "#88919e")
+                        .attr("stroke-width", d => Math.sqrt(d.value));
+
+        const caption_circle = svg.selectAll("circle")
+                                  .data(caption)
+                                  .enter()
+                                  .append('circle')
+                                  .attr("stroke", "#88919e")
+                                  .attr("stroke-width", 1.5)
+                                  .attr("cx", 715)
+                                  .attr("cy", (d) => d.y)
+                                  .attr("r", 10)
+                                  .attr('fill', (d) => {return color(d.title)})
+
+        const caption_text = svg.selectAll("text")
+                                .data(caption)
+                                .enter()
+                                .append('text')
+                                .style("font-size", "26px")
+                                .attr("dominant-baseline", "middle")
+                                .attr('fill', () => d3.color('rgb(0, 54, 122)'))
+                                .attr('x', 740)
+                                .attr('y', (d) => d.y + 1)
+                                .text((d) => d.text)
+                                .attr('font-family', 'Noto Sans TC')                        
+
+        const node = svg.append("g")
+                        .attr("stroke", "#88919e")
+                        .attr("stroke-width", 1.5)
+                        .selectAll("circle")
+                        .data(nodes)
+                        .join("circle")
+                        .attr("r", 10)
+                        .attr("fill", (d) => { return color(d.title)})
+                        .call(drag(simulation))
+                        .on("click", showInfo);
+    
+        node.append("title")
+            .text(d => d.id);
+    
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+        
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+        });
+    
+        //invalidation.then(() => simulation.stop());
+    }
+
+    showInfo = (d, simulation) => {
+        d.fx = null;
+        d.fy = null;
+        console.log(d.index, d.title, d.institution);
+    }
+
+    drag = (simulation) => {
+  
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+        
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        return d3.drag()
+                 .on("start", dragstarted)
+                 .on("drag", dragged)
+                 .on("end",  dragended);
+    }
+
+</script>
